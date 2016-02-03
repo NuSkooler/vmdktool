@@ -608,13 +608,39 @@ setsize(int fd, SectorType capacity)
 	}
 }
 
+static void
+grain2marker(unsigned char *grain, int ofd, SectorType sec,
+    int zstrength, struct Marker *m)
+{
+	z_stream strm;
+	int ret;
+
+	m->val = sec;
+	m->size = -1;
+	memset(&strm, '\0', sizeof strm);
+	ret = deflateInit(&strm, zstrength);
+	assert(ret == Z_OK);
+	strm.avail_in = SET_GRAINSZ * SECTORSZ;
+	strm.next_in = grain;
+	strm.avail_out = SECTORSZ - MARKERHDRSZ;
+	strm.next_out = (unsigned char *)m + MARKERHDRSZ;
+	ret = Z_OK;
+	while (ret == Z_OK) {
+		ret = deflate(&strm, Z_FINISH);
+		assert(ret == Z_OK || ret == Z_STREAM_END);
+		awrite(ofd, m, sizeof *m - strm.avail_out, "compressed grain");
+		strm.avail_out = SECTORSZ;
+		strm.next_out = (unsigned char *)m;
+	}
+	deflateEnd(&strm);
+}
+
 static uint32_t
 raw2grain(unsigned char *grain, int ofd, SectorType sec, int zstrength)
 {
 	off_t start, end;
 	struct Marker m;
-	z_stream strm;
-	int i, ret;
+	int i;
 
 	for (i = SET_GRAINSZ * SECTORSZ; i; i--)
 		if (grain[i - 1])
@@ -623,26 +649,7 @@ raw2grain(unsigned char *grain, int ofd, SectorType sec, int zstrength)
 		return 0;	/* No data */
 
 	start = lseek(ofd, 0, SEEK_CUR);
-
-	m.val = sec;
-	m.size = -1;
-	memset(&strm, '\0', sizeof strm);
-	ret = deflateInit(&strm, zstrength);
-	assert(ret == Z_OK);
-	strm.avail_in = SET_GRAINSZ * SECTORSZ;
-	strm.next_in = grain;
-	strm.avail_out = SECTORSZ - MARKERHDRSZ;
-	strm.next_out = (unsigned char *)&m + MARKERHDRSZ;
-	ret = Z_OK;
-	while (ret == Z_OK) {
-		ret = deflate(&strm, Z_FINISH);
-		assert(ret == Z_OK || ret == Z_STREAM_END);
-		awrite(ofd, &m, sizeof m - strm.avail_out, "compressed grain");
-		strm.avail_out = SECTORSZ;
-		strm.next_out = (unsigned char *)&m;
-	}
-	deflateEnd(&strm);
-
+	grain2marker(grain, ofd, sec, zstrength, &m);
 	end = lseek(ofd, 0, SEEK_CUR);
 	if (diag > 1)
 		printf("DEFLATEd grain from %lu to %lu\n",
