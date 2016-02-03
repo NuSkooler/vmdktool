@@ -106,6 +106,7 @@ struct Marker {
 #define MIN_HEADER_OVERHEAD	0x80
 
 static int diag;
+static int zstrength;
 
 static int
 usage(void)
@@ -609,7 +610,7 @@ setsize(int fd, SectorType capacity)
 }
 
 static void
-grain2marker(unsigned char *grain, int ofd, int zstrength, struct Marker *m)
+grain2marker(unsigned char *grain, int ofd, struct Marker *m)
 {
 	z_stream strm;
 	int ret;
@@ -633,7 +634,7 @@ grain2marker(unsigned char *grain, int ofd, int zstrength, struct Marker *m)
 }
 
 static uint32_t
-raw2grain(unsigned char *grain, int ofd, SectorType sec, int zstrength)
+raw2grain(unsigned char *grain, int ofd, SectorType sec)
 {
 	off_t start, end;
 	struct Marker m;
@@ -646,7 +647,7 @@ raw2grain(unsigned char *grain, int ofd, SectorType sec, int zstrength)
 		return 0;	/* No data */
 
 	start = lseek(ofd, 0, SEEK_CUR);
-	grain2marker(grain, ofd, zstrength, &m);
+	grain2marker(grain, ofd, &m);
 	end = lseek(ofd, 0, SEEK_CUR);
 	if (diag > 1)
 		printf("DEFLATEd grain from %lu to %lu\n",
@@ -670,7 +671,7 @@ raw2grain(unsigned char *grain, int ofd, SectorType sec, int zstrength)
 }
 
 static void
-allraw2grains(int ifd, uint64_t capacity, int ofd, int zstrength)
+allraw2grains(int ifd, uint64_t capacity, int ofd)
 {
         unsigned char grain[SET_GRAINSZ * SECTORSZ];
 	struct Marker eos, footer, *mdir, *mtbl;
@@ -726,7 +727,7 @@ allraw2grains(int ifd, uint64_t capacity, int ofd, int zstrength)
 			got = aread(ifd, grain, sizeof grain);
 		if (got) {
 			read_total += got;
-			ent = raw2grain(grain, ofd, sec, zstrength);
+			ent = raw2grain(grain, ofd, sec);
 			memcpy((char *)mtbl + SECTORSZ + mtblent * 4, &ent, 4);
 			mtblent++;
 		}
@@ -818,7 +819,7 @@ main(int argc, char **argv)
 {
 	const char *randomfn, *streamfn, *vmdkfn;
 	char block[SECTORSZ], *dbuf, *end;
-	int ch, ifd, outspec, ofd, opti, zstrength;
+	int ch, ifd, outspec, ofd, opti;
 	struct SparseExtentHeader h;
 	int64_t capacity;
 	uint32_t optt;
@@ -1043,7 +1044,7 @@ main(int argc, char **argv)
 			perror(vmdkfn);
 			return 12;
 		}
-		allraw2grains(ifd, capacity, ofd, zstrength);
+		allraw2grains(ifd, capacity, ofd);
 		if (close(ofd) == -1)
 			perror("close");
 	}
