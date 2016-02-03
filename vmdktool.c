@@ -266,7 +266,8 @@ vmdkdesc(int fd, const struct SparseExtentHeader *h)
 
 	assert(h->descriptorOffset);
 	assert(h->descriptorSize);
-	assert(desc = malloc(h->descriptorSize * SECTORSZ + 1));
+	desc = malloc(h->descriptorSize * SECTORSZ + 1);
+	assert(desc != NULL);
 
 	lseek(fd, h->descriptorOffset * SECTORSZ, SEEK_SET);
 	sz = h->descriptorSize * SECTORSZ;
@@ -339,7 +340,8 @@ marker2grain(int ifd, const struct SparseExtentHeader *h,
 		want = (want / SECTORSZ + 1) * SECTORSZ;
 	if (*bufsz < (size_t)want - MARKERHDRSZ) {
 		*bufsz = want - MARKERHDRSZ;
-		assert(*buf = realloc(*buf, *bufsz));
+		*buf = realloc(*buf, *bufsz);
+		assert(*buf != NULL);
 	}
 	memcpy(*buf, &m->u, 500);
 	if (want > SECTORSZ) {
@@ -350,13 +352,17 @@ marker2grain(int ifd, const struct SparseExtentHeader *h,
 
 	if ((h->flags & FLAGBIT_COMPRESSED) &&
 	    h->compressAlgorithm == COMPRESSION_DEFLATE) {
+		int ret;
+
 		memset(&strm, '\0', sizeof strm);
-		assert(inflateInit(&strm) == Z_OK);
+		ret = inflateInit(&strm);
+		assert(ret == Z_OK);
 		strm.avail_in = m->size;
 		strm.next_in = *buf;
 		strm.avail_out = h->grainSize * SECTORSZ;
 		strm.next_out = grain;
-		assert(inflate(&strm, Z_FINISH) == Z_STREAM_END);
+		ret = inflate(&strm, Z_FINISH);
+		assert(ret == Z_STREAM_END);
 		assert(strm.avail_in == 0);
 		assert(strm.avail_out == 0);
 		inflateEnd(&strm);
@@ -437,6 +443,7 @@ vmdkparsestream(int ifd, struct SparseExtentHeader *h, int ofd)
 	size_t dbufsz;
 	off_t pos;
 	int eos;
+	int ret;
 
 	pos = lseek(ifd, 0, SEEK_CUR);
 
@@ -446,7 +453,8 @@ vmdkparsestream(int ifd, struct SparseExtentHeader *h, int ofd)
 	eos = 0;
 	mdirblks = dirblks(h);
 	mtblblks = h->numGTEsPerGT * sizeof(uint32_t) / SECTORSZ;
-	assert(grain = malloc(h->grainSize * SECTORSZ));
+	grain = malloc(h->grainSize * SECTORSZ);
+	assert(grain != NULL);
 	while (read(ifd, buf, sizeof buf) == sizeof buf) {
 		if (eos)
 			fprintf(stderr, "oops, more data after EOS...\n");
@@ -484,7 +492,8 @@ vmdkparsestream(int ifd, struct SparseExtentHeader *h, int ofd)
 				    (unsigned long long)m->val);
 			pos = lseek(ifd, 0, SEEK_CUR) + m->val * SECTORSZ;
 			assert(sizeof f <= m->val * SECTORSZ);
-			assert(vmdkinfo("<footer>", ifd, &f, 0));
+			ret = vmdkinfo("<footer>", ifd, &f, 0);
+			assert(ret != 0);
 			if (h->gdOffset == (unsigned long long)-1)
 				h->gdOffset = f.gdOffset;
 			lseek(ifd, pos, SEEK_SET);
@@ -554,7 +563,8 @@ grain2raw(int ifd, const struct SparseExtentHeader *h, int ofd, SectorType n,
 		printf("type GRAIN, %lu bytes of data, lba %llu\n",
 		    (unsigned long)m.size, (unsigned long long)m.val);
 
-	assert(grain = malloc(h->grainSize * SECTORSZ));
+	grain = malloc(h->grainSize * SECTORSZ);
+	assert(grain != NULL);
 	marker2grain(ifd, h, &m, grain, buf, bufsz);
 
 	if (diag > 1)
@@ -586,12 +596,15 @@ static void
 setsize(int fd, SectorType capacity)
 {
 	struct stat st;
+	int ret;
 
-	assert(fstat(fd, &st) == 0);
+	ret = fstat(fd, &st);
+	assert(ret == 0);
 	if ((SectorType)st.st_size != capacity * SECTORSZ) {
 		lseek(fd, capacity * SECTORSZ, SEEK_SET);
 		awrite(fd, "", 1, "NUL byte");
-		assert(ftruncate(fd, capacity * SECTORSZ) == 0);
+		ret = ftruncate(fd, capacity * SECTORSZ);
+		assert(ret == 0);
 	}
 }
 
@@ -614,7 +627,8 @@ raw2grain(unsigned char *grain, int ofd, SectorType sec, int zstrength)
 	m.val = sec;
 	m.size = -1;
 	memset(&strm, '\0', sizeof strm);
-	assert(deflateInit(&strm, zstrength) == Z_OK);
+	ret = deflateInit(&strm, zstrength);
+	assert(ret == Z_OK);
 	strm.avail_in = SET_GRAINSZ * SECTORSZ;
 	strm.next_in = grain;
 	strm.avail_out = SECTORSZ - MARKERHDRSZ;
@@ -688,9 +702,11 @@ allraw2grains(int ifd, uint64_t capacity, int ofd, int zstrength)
 	lseek(ofd, h.overHead * SECTORSZ, SEEK_SET);
 
 	mdirsz = SECTORSZ * 2;
-	assert(mdir = calloc(1, mdirsz));
+	mdir = calloc(1, mdirsz);
+	assert(mdir != NULL);
 	mtblsz = SET_GTESPERGT * sizeof(uint32_t);
-	assert(mtbl = calloc(1, SECTORSZ + mtblsz));
+	mtbl = calloc(1, SECTORSZ + mtblsz);
+	assert(mtbl != NULL);
 
 	got = -1;
 	mdirent = mtblent = 0;
@@ -719,7 +735,8 @@ allraw2grains(int ifd, uint64_t capacity, int ofd, int zstrength)
 			awrite(ofd, mtbl, SECTORSZ + mtblsz, "grain table");
 			n = SECTORSZ / sizeof(uint32_t) + mdirent++;
 			if (n * sizeof(uint32_t) >= mdirsz) {
-				assert(mdir = realloc(mdir, mdirsz + SECTORSZ));
+				mdir = realloc(mdir, mdirsz + SECTORSZ);
+				assert(mdir != NULL);
 				memset((char *)mdir + mdirsz, '\0', SECTORSZ);
 				mdirsz += SECTORSZ;
 				assert(n * sizeof(uint32_t) < mdirsz);
@@ -805,6 +822,7 @@ main(int argc, char **argv)
 	SectorType sec;
 	struct stat st;
 	off_t insz;
+	int ret;
 
 	assert(sizeof h == SECTORSZ);	/* must be padded & packed! */
 	assert(sizeof *m == SECTORSZ);	/* must be padded & packed! */
@@ -953,7 +971,8 @@ main(int argc, char **argv)
 			    (unsigned long long)sec);
 			return 8;
 		}
-		assert(vmdkinfo(argv[optind], ifd, &h, 0));
+		ret = vmdkinfo(argv[optind], ifd, &h, 0);
+		assert(ret != 0);
 	}
 
 	if (opti) {
