@@ -79,6 +79,7 @@ struct Marker {
 		uint8_t		data[500];
 	} u;
 } __attribute__((__packed__));
+#define MARKERHDRSZ	((int)(sizeof(SectorType) + sizeof(uint32_t)))
 
 #define VMDK_MAGIC	(('V' << 24) | ('M' << 16) | ('D' << 8) | 'K')
 
@@ -333,11 +334,11 @@ marker2grain(int ifd, const struct SparseExtentHeader *h,
 	z_stream strm;
 	ssize_t want;
 
-	want = m->size + 12;
+	want = m->size + MARKERHDRSZ;
 	if (want % SECTORSZ)
 		want = (want / SECTORSZ + 1) * SECTORSZ;
-	if (*bufsz < (size_t)want - 12) {
-		*bufsz = want - 12;
+	if (*bufsz < (size_t)want - MARKERHDRSZ) {
+		*bufsz = want - MARKERHDRSZ;
 		assert(*buf = realloc(*buf, *bufsz));
 	}
 	memcpy(*buf, &m->u, 500);
@@ -616,8 +617,8 @@ raw2grain(unsigned char *grain, int ofd, SectorType sec, int zstrength)
 	assert(deflateInit(&strm, zstrength) == Z_OK);
 	strm.avail_in = SET_GRAINSZ * SECTORSZ;
 	strm.next_in = grain;
-	strm.avail_out = SECTORSZ - 12;
-	strm.next_out = (unsigned char *)&m + 12;
+	strm.avail_out = SECTORSZ - MARKERHDRSZ;
+	strm.next_out = (unsigned char *)&m + MARKERHDRSZ;
 	ret = Z_OK;
 	while (ret == Z_OK) {
 		ret = deflate(&strm, Z_FINISH);
@@ -634,13 +635,13 @@ raw2grain(unsigned char *grain, int ofd, SectorType sec, int zstrength)
 		    SET_GRAINSZ * SECTORSZ, (unsigned long)(end - start));
 
 	/* Go back and write the size */
-	assert(end - start > 12);
+	assert(end - start > MARKERHDRSZ);
 	m.val = sec;
-	m.size = end - start - 12;
+	m.size = end - start - MARKERHDRSZ;
 	lseek(ofd, start, SEEK_SET);
 	if (diag > 1)
 		printf("Rewound to the start of the grain... ");
-	awrite(ofd, &m, 12, "grain size");
+	awrite(ofd, &m, MARKERHDRSZ, "grain size");
 	if (end % SECTORSZ)
 		end = (end / SECTORSZ + 1) * SECTORSZ;
 	lseek(ofd, end, SEEK_SET);
