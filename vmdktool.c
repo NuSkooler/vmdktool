@@ -609,14 +609,11 @@ setsize(int fd, SectorType capacity)
 }
 
 static void
-grain2marker(unsigned char *grain, int ofd, SectorType sec,
-    int zstrength, struct Marker *m)
+grain2marker(unsigned char *grain, int ofd, int zstrength, struct Marker *m)
 {
 	z_stream strm;
 	int ret;
 
-	m->val = sec;
-	m->size = -1;
 	memset(&strm, '\0', sizeof strm);
 	ret = deflateInit(&strm, zstrength);
 	assert(ret == Z_OK);
@@ -649,7 +646,7 @@ raw2grain(unsigned char *grain, int ofd, SectorType sec, int zstrength)
 		return 0;	/* No data */
 
 	start = lseek(ofd, 0, SEEK_CUR);
-	grain2marker(grain, ofd, sec, zstrength, &m);
+	grain2marker(grain, ofd, zstrength, &m);
 	end = lseek(ofd, 0, SEEK_CUR);
 	if (diag > 1)
 		printf("DEFLATEd grain from %lu to %lu\n",
