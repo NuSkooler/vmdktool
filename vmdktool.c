@@ -700,19 +700,17 @@ static void
 allraw2grains(int ifd, uint64_t capacity, int ofd)
 {
         unsigned char grain[SET_GRAINSZ * SECTORSZ];
-	struct Marker eos, footer, mdir, *mtbl;
+	struct Marker eos, footer, mdir;
 	struct SparseExtentHeader h;
-	int gdirent, mtblent, n;
+	int gdirent, gtblent, n;
 	char *gdir;
+	char *gtbl;
 	char descblk[SECTORSZ];
-	size_t gdirsz, mtblsz;
+	size_t gdirsz, gtblsz;
 	uint64_t read_total;
 	SectorType sec;
 	uint32_t ent;
 	ssize_t got;
-	char *gtbl;
-	size_t gtblsz;
-	int gtblent;
 
 	inithdr(&h);
 
@@ -722,17 +720,12 @@ allraw2grains(int ifd, uint64_t capacity, int ofd)
 	gdir = calloc(1, gdirsz);
 	assert(gdir != NULL);
 
-	mtblsz = SET_GTESPERGT * sizeof(uint32_t);
-	mtbl = calloc(1, SECTORSZ + mtblsz);
-	assert(mtbl != NULL);
-
 	gtblsz = SET_GTESPERGT * sizeof(uint32_t);
 	gtbl = calloc(1, gtblsz);
 	assert(gtbl != NULL);
 
 	got = -1;
-	gdirent = mtblent = 0;
-	gtblent = 0;
+	gdirent = gtblent = 0;
 
 	lseek(ifd, 0, SEEK_SET);
 	read_total = 0;
@@ -747,31 +740,22 @@ allraw2grains(int ifd, uint64_t capacity, int ofd)
 		if (got) {
 			read_total += got;
 			ent = raw2grain(grain, ofd, sec);
-			memcpy((char *)mtbl + SECTORSZ + mtblent * 4, &ent, 4);
-			mtblent++;
 			memcpy((char *)gtbl + gtblent * 4, &ent, 4);
 			gtblent++;
 		}
 
-		if (mtblent == SET_GTESPERGT || (mtblent && !got)) {
-if (0) {
-			mtbl->val = mtblsz / SECTORSZ;
-			mtbl->size = 0;
-			mtbl->u.type = MARKER_GT;
-			ent = lseek(ofd, 0, SEEK_CUR) / SECTORSZ + 1;
-			awrite(ofd, mtbl, SECTORSZ + mtblsz, "grain table");
-} else {
+		if (gtblent == SET_GTESPERGT || (gtblent && !got)) {
+			struct Marker mtbl;
+
 			ent = lseek(ofd, 0, SEEK_CUR) / SECTORSZ + 1;
 
-			struct Marker mtbl2;
-			memset(&mtbl2, '\0', sizeof mtbl2);
-			mtbl2.val = mtblsz / SECTORSZ;
-			mtbl2.size = 0;
-			mtbl2.u.type = MARKER_GT;
-			awrite(ofd, &mtbl2, SECTORSZ, "grain table marker");
-			//awrite(ofd, (char *)mtbl + SECTORSZ, mtblsz, "grain table");
-			awrite(ofd, gtbl, mtblsz, "grain table");
-}
+			memset(&mtbl, '\0', sizeof mtbl);
+			mtbl.val = gtblsz / SECTORSZ;
+			mtbl.size = 0;
+			mtbl.u.type = MARKER_GT;
+			awrite(ofd, &mtbl, SECTORSZ, "grain table marker");
+
+			awrite(ofd, gtbl, gtblsz, "grain table");
 
 			n = gdirent++;
 			if (n * sizeof(uint32_t) >= gdirsz) {
@@ -784,8 +768,6 @@ if (0) {
 			}
 			memcpy((char *)gdir + n * 4, &ent, 4);
 
-			memset(mtbl, '\0', SECTORSZ + mtblsz);
-			mtblent = 0;
 			memset(gtbl, '\0', gtblsz);
 			gtblent = 0;
 		}
@@ -824,7 +806,6 @@ if (0) {
 	eos.u.type = MARKER_EOS;
 	awrite(ofd, &eos, sizeof eos, "eos");
 
-	free(mtbl);
 	free(gtbl);
 	free(gdir);
 
