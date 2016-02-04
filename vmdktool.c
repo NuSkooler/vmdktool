@@ -648,6 +648,8 @@ raw2grain(unsigned char *grain, int ofd, SectorType sec)
 		return 0;	/* No data */
 
 	start = lseek(ofd, 0, SEEK_CUR);
+	m.val = sec;
+	m.size = -1;
 	grain2marker(grain, ofd, &m);
 	end = lseek(ofd, 0, SEEK_CUR);
 	if (diag > 1)
