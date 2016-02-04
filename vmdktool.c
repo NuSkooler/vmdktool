@@ -647,9 +647,11 @@ raw2grain(unsigned char *grain, int ofd, SectorType sec)
 	if (!i)
 		return 0;	/* No data */
 
+	/* First marker header is overwritten below */
+	m.val = 0;
+	m.size = 0;
+
 	start = lseek(ofd, 0, SEEK_CUR);
-	m.val = sec;
-	m.size = -1;
 	grain2marker(grain, ofd, &m);
 	end = lseek(ofd, 0, SEEK_CUR);
 	if (diag > 1)
@@ -664,6 +666,7 @@ raw2grain(unsigned char *grain, int ofd, SectorType sec)
 	if (diag > 1)
 		printf("Rewound to the start of the grain... ");
 	awrite(ofd, &m, MARKERHDRSZ, "grain size");
+
 	if (end % SECTORSZ)
 		end = (end / SECTORSZ + 1) * SECTORSZ;
 	lseek(ofd, end, SEEK_SET);
@@ -783,26 +786,20 @@ writegrains(int ifd, int ofd, size_t *rgdirsz, uint64_t *rread_total)
 		}
 
 		if (gtblent == SET_GTESPERGT || (gtblent && !got)) {
-			int n;
-
 			secidx = lseek(ofd, 0, SEEK_CUR) / SECTORSZ + 1;
+			if (gdirent * sizeof(uint32_t) >= gdirsz) {
+				gdir = realloc(gdir, gdirsz + SECTORSZ);
+				assert(gdir != NULL);
+				memset((char *)gdir + gdirsz, '\0', SECTORSZ);
+				gdirsz += SECTORSZ;
+				assert(gdirent * sizeof(uint32_t) < gdirsz);
+			}
+			memcpy((char *)gdir + gdirent * 4, &secidx, 4);
+			gdirent++;
 
 			writemarker(ofd, gtblsz / SECTORSZ, MARKER_GT,
 			    "grain table marker");
-
 			awrite(ofd, gtbl, gtblsz, "grain table");
-
-			n = gdirent++;
-			if (n * sizeof(uint32_t) >= gdirsz) {
-				gdir = realloc(gdir, gdirsz + SECTORSZ);
-				assert(gdir != NULL);
-
-				memset((char *)gdir + gdirsz, '\0', SECTORSZ);
-				gdirsz += SECTORSZ;
-				assert(n * sizeof(uint32_t) < gdirsz);
-			}
-			memcpy((char *)gdir + n * 4, &secidx, 4);
-
 			memset(gtbl, '\0', gtblsz);
 			gtblent = 0;
 		}
