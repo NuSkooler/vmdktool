@@ -107,6 +107,7 @@ struct Marker {
 
 static int diag;
 static int zstrength;
+static uint64_t capacity;
 
 static int
 usage(void)
@@ -594,17 +595,17 @@ allgrains2raw(int ifd, const struct SparseExtentHeader *h, int ofd)
 }
 
 static void
-setsize(int fd, SectorType capacity)
+setsize(int fd, SectorType sz)
 {
 	struct stat st;
 	int ret;
 
 	ret = fstat(fd, &st);
 	assert(ret == 0);
-	if ((SectorType)st.st_size != capacity * SECTORSZ) {
-		lseek(fd, capacity * SECTORSZ, SEEK_SET);
+	if ((SectorType)st.st_size != sz * SECTORSZ) {
+		lseek(fd, sz * SECTORSZ, SEEK_SET);
 		awrite(fd, "", 1, "NUL byte");
-		ret = ftruncate(fd, capacity * SECTORSZ);
+		ret = ftruncate(fd, sz * SECTORSZ);
 		assert(ret == 0);
 	}
 }
@@ -707,7 +708,7 @@ writemarker(int ofd, SectorType val, uint32_t type, const char *what)
 }
 
 static void
-allraw2grains(int ifd, uint64_t capacity, int ofd)
+allraw2grains(int ifd, int ofd)
 {
 	struct SparseExtentHeader h;
 	int gdirent, gtblent;
@@ -840,7 +841,6 @@ main(int argc, char **argv)
 	char block[SECTORSZ], *dbuf, *end;
 	int ch, ifd, outspec, ofd, opti;
 	struct SparseExtentHeader h;
-	int64_t capacity;
 	uint32_t optt;
 	struct Marker *m;
 	SectorType sec;
@@ -1063,7 +1063,7 @@ main(int argc, char **argv)
 			perror(vmdkfn);
 			return 12;
 		}
-		allraw2grains(ifd, capacity, ofd);
+		allraw2grains(ifd, ofd);
 		if (close(ofd) == -1)
 			perror("close");
 	}
