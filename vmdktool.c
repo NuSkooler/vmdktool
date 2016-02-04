@@ -671,6 +671,30 @@ raw2grain(unsigned char *grain, int ofd, SectorType sec)
 }
 
 static void
+inithdr(struct SparseExtentHeader *h)
+{
+	memset(h, '\0', sizeof h);
+	h->magicNumber = VMDK_MAGIC;
+	h->version = SET_VMDKVER;
+	h->flags = FLAGBIT_NL | FLAGBIT_COMPRESSED | FLAGBIT_MARKERS;
+	h->grainSize = SET_GRAINSZ;
+	h->descriptorOffset = sizeof *h / SECTORSZ;
+	h->descriptorSize = SECTORSZ/*sizeof descblk*/ / SECTORSZ;
+	h->numGTEsPerGT = SET_GTESPERGT;
+	h->rgdOffset = 0;
+	h->gdOffset = -1;		/* Don't know yet */
+	h->overHead = MIN_HEADER_OVERHEAD;
+	if (h->overHead * SECTORSZ < sizeof *h + SECTORSZ/*sizeof descblk*/)
+		h->overHead = (sizeof *h + SECTORSZ/*sizeof descblk*/) / SECTORSZ + 1;
+	h->uncleanShutdown = 0;
+	h->singleEndLineChar = '\n';
+	h->nonEndLineChar = ' ';
+	h->doubleEndLineChar1 = '\r';
+	h->doubleEndLineChar2 = '\n';
+	h->compressAlgorithm = COMPRESSION_DEFLATE;
+}
+
+static void
 allraw2grains(int ifd, uint64_t capacity, int ofd)
 {
         unsigned char grain[SET_GRAINSZ * SECTORSZ];
@@ -684,25 +708,7 @@ allraw2grains(int ifd, uint64_t capacity, int ofd)
 	uint32_t ent;
 	ssize_t got;
 
-	memset(&h, '\0', sizeof h);
-	h.magicNumber = VMDK_MAGIC;
-	h.version = SET_VMDKVER;
-	h.flags = FLAGBIT_NL | FLAGBIT_COMPRESSED | FLAGBIT_MARKERS;
-	h.grainSize = SET_GRAINSZ;
-	h.descriptorOffset = sizeof h / SECTORSZ;
-	h.descriptorSize = sizeof descblk / SECTORSZ;
-	h.numGTEsPerGT = SET_GTESPERGT;
-	h.rgdOffset = 0;
-	h.gdOffset = -1;		/* Don't know yet */
-	h.overHead = MIN_HEADER_OVERHEAD;
-	if (h.overHead * SECTORSZ < sizeof h + sizeof descblk)
-		h.overHead = (sizeof h + sizeof descblk) / SECTORSZ + 1;
-	h.uncleanShutdown = 0;
-	h.singleEndLineChar = '\n';
-	h.nonEndLineChar = ' ';
-	h.doubleEndLineChar1 = '\r';
-	h.doubleEndLineChar2 = '\n';
-	h.compressAlgorithm = COMPRESSION_DEFLATE;
+	inithdr(&h);
 
 	lseek(ofd, h.overHead * SECTORSZ, SEEK_SET);
 
