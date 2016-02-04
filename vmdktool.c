@@ -706,7 +706,7 @@ writemarker(int ofd, SectorType val, uint32_t type, const char *what)
 }
 
 static void
-writedescblk(int ofd)
+writedescblk(int ofd, uint64_t sz)
 {
 	char descblk[SECTORSZ];
 
@@ -729,8 +729,8 @@ writedescblk(int ofd)
 	    "ddb.geometry.sectors = \"63\"\n"
 	    "ddb.adapterType = \"lsilogic\"\n"
 	    "ddb.toolsVersion = \"6532\"\n",
-	    (unsigned long)(capacity / SECTORSZ),
-	    (unsigned long)(capacity / 63 / 255));
+	    (unsigned long)(sz / SECTORSZ),
+	    (unsigned long)(sz / 63 / 255));
 	awrite(ofd, &descblk, sizeof descblk, "descriptor block");
 }
 
@@ -822,42 +822,47 @@ writegrains(int ifd, int ofd, size_t *rgdirsz, uint64_t *rread_total)
 }
 
 static void
-allwritegrain(int ifd, int ofd)
+writevmdk(int ifd, int ofd)
 {
 	struct SparseExtentHeader h;
 	size_t gdirsz;
-	uint64_t read_total;
+	uint64_t read_total, sz;
 
 	inithdr(&h);
 
 	lseek(ifd, 0, SEEK_SET);
 	lseek(ofd, h.overHead * SECTORSZ, SEEK_SET);
 
+	/* 1. Write Gains */
 	writegrains(ifd, ofd, &gdirsz, &read_total);
 
+	/* 2. Compute sizes and finish header */
 	h.gdOffset = (lseek(ofd, 0, SEEK_CUR) - gdirsz - SECTORSZ) / SECTORSZ + 1;
-
-	/* Finish assigning our header before writing it to disk */
 	if (!capacity) {
-		capacity = read_total;
+		sz = read_total;
 		if (diag > 1)
 			printf("Capacity calculated as %llu\n",
-			    (unsigned long long)capacity);
-	}
-	h.capacity = capacity / SECTORSZ;
+			    (unsigned long long)sz);
+	} else
+		sz = capacity;
+	h.capacity = sz / SECTORSZ;
 
+	/* 3. Write footer */
 	writemarker(ofd, sizeof h / SECTORSZ, MARKER_FOOTER, "footer marker");
 	awrite(ofd, &h, sizeof h, "footer");
 
+	/* 4. Write EOS */
 	writemarker(ofd, 0, MARKER_EOS, "eos marker");
 
+	/* 5. Write header */
 	/* Go back and write the header & descriptor block at the beginning */
 	lseek(ofd, 0, SEEK_SET);
 	if (diag > 1)
 		printf("Rewound to the start of the file... ");
 	awrite(ofd, &h, sizeof h, "header");
 
-	writedescblk(ofd);
+	/* 6. Write desc block */
+	writedescblk(ofd, sz);
 }
 
 int
@@ -1089,7 +1094,7 @@ main(int argc, char **argv)
 			perror(vmdkfn);
 			return 12;
 		}
-		allwritegrain(ifd, ofd);
+		writevmdk(ifd, ofd);
 		if (close(ofd) == -1)
 			perror("close");
 	}
