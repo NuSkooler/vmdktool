@@ -755,27 +755,27 @@ readgrain(int ifd, unsigned char *grain, ssize_t len, uint64_t read_total)
 }
 
 static void
-writegrains(int ifd, int ofd, size_t *rgdirsz, uint64_t *rread_total)
+writegrains(int ifd, int ofd, size_t *rdirsz, uint64_t *rread_total)
 {
 	uint64_t read_total;
-	char *gdir;
-	size_t gdirsz;
-	int gdirent;
-	char *gtbl;
-	size_t gtblsz;
-	int gtblent;
+	char *dir;
+	size_t dirsz;
+	int dirent;
+	char *tbl;
+	size_t tblsz;
+	int tblent;
 
 	read_total = 0;
 
-	gdirsz = SECTORSZ;
-	gdir = calloc(1, gdirsz);
-	gdirent = 0;
-	assert(gdir != NULL);
+	dirsz = SECTORSZ;
+	dir = calloc(1, dirsz);
+	dirent = 0;
+	assert(dir != NULL);
 
-	gtblsz = SET_GTESPERGT * sizeof(uint32_t);
-	gtbl = calloc(1, gtblsz);
-	gtblent = 0;
-	assert(gtbl != NULL);
+	tblsz = SET_GTESPERGT * sizeof(uint32_t);
+	tbl = calloc(1, tblsz);
+	tblent = 0;
+	assert(tbl != NULL);
 
 	SectorType sec;
 	ssize_t got;
@@ -789,42 +789,42 @@ writegrains(int ifd, int ofd, size_t *rgdirsz, uint64_t *rread_total)
 
 		if (got) {
 			secidx = lseek(ofd, 0, SEEK_CUR) / SECTORSZ;
-			memcpy((char *)gtbl + gtblent * 4, &secidx, 4);
-			gtblent++;
+			memcpy((char *)tbl + tblent * 4, &secidx, 4);
+			tblent++;
 
 			writegrain(grain, ofd, sec);
 		}
 
-		if (gtblent == SET_GTESPERGT || (gtblent && !got)) {
-			if (gdirent * sizeof(uint32_t) >= gdirsz) {
-				gdir = realloc(gdir, gdirsz + SECTORSZ);
-				assert(gdir != NULL);
-				memset((char *)gdir + gdirsz, '\0', SECTORSZ);
-				gdirsz += SECTORSZ;
-				assert(gdirent * sizeof(uint32_t) < gdirsz);
+		if (tblent == SET_GTESPERGT || (tblent && !got)) {
+			if (dirent * sizeof(uint32_t) >= dirsz) {
+				dir = realloc(dir, dirsz + SECTORSZ);
+				assert(dir != NULL);
+				memset((char *)dir + dirsz, '\0', SECTORSZ);
+				dirsz += SECTORSZ;
+				assert(dirent * sizeof(uint32_t) < dirsz);
 			}
 
 			secidx = lseek(ofd, 0, SEEK_CUR) / SECTORSZ + 1;
-			memcpy((char *)gdir + gdirent * 4, &secidx, 4);
-			gdirent++;
+			memcpy((char *)dir + dirent * 4, &secidx, 4);
+			dirent++;
 
-			writemarker(ofd, gtblsz / SECTORSZ, MARKER_GT,
+			writemarker(ofd, tblsz / SECTORSZ, MARKER_GT,
 			    "grain table marker");
-			awrite(ofd, gtbl, gtblsz, "grain table");
+			awrite(ofd, tbl, tblsz, "grain table");
 
-			memset(gtbl, '\0', gtblsz);
-			gtblent = 0;
+			memset(tbl, '\0', tblsz);
+			tblent = 0;
 		}
 	}
 
-	free(gtbl);
+	free(tbl);
 
-	writemarker(ofd, gdirsz / SECTORSZ, MARKER_GD, "grain dir marker");
-	awrite(ofd, gdir, gdirsz, "grain dir");
+	writemarker(ofd, dirsz / SECTORSZ, MARKER_GD, "grain dir marker");
+	awrite(ofd, dir, dirsz, "grain dir");
 
-	free(gdir);
+	free(dir);
 
-	*rgdirsz = gdirsz;
+	*rdirsz = dirsz;
 	*rread_total = read_total;
 }
 
@@ -832,7 +832,7 @@ static void
 writevmdk(int ifd, int ofd)
 {
 	struct SparseExtentHeader h;
-	size_t gdirsz;
+	size_t dirsz;
 	uint64_t read_total, sz;
 
 	inithdr(&h);
@@ -841,10 +841,10 @@ writevmdk(int ifd, int ofd)
 	lseek(ofd, h.overHead * SECTORSZ, SEEK_SET);
 
 	/* 1. Write Gains */
-	writegrains(ifd, ofd, &gdirsz, &read_total);
+	writegrains(ifd, ofd, &dirsz, &read_total);
 
 	/* 2. Compute sizes and finish header */
-	h.gdOffset = (lseek(ofd, 0, SEEK_CUR) - gdirsz - SECTORSZ) / SECTORSZ + 1;
+	h.gdOffset = (lseek(ofd, 0, SEEK_CUR) - dirsz - SECTORSZ) / SECTORSZ + 1;
 	if (!capacity) {
 		sz = read_total;
 		if (diag > 1)
