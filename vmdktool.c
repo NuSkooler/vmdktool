@@ -694,8 +694,6 @@ inithdr(struct SparseExtentHeader *h)
 	h->compressAlgorithm = COMPRESSION_DEFLATE;
 }
 
-#define GDIR
-
 static void
 allraw2grains(int ifd, uint64_t capacity, int ofd)
 {
