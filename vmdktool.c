@@ -709,16 +709,13 @@ writemarker(int ofd, SectorType val, uint32_t type, const char *what)
 static void
 allraw2grains(int ifd, uint64_t capacity, int ofd)
 {
-        unsigned char grain[SET_GRAINSZ * SECTORSZ];
 	struct SparseExtentHeader h;
-	int gdirent, gtblent, n;
+	int gdirent, gtblent;
 	char *gdir;
 	char *gtbl;
-	char descblk[SECTORSZ];
 	size_t gdirsz, gtblsz;
 	uint64_t read_total;
 	SectorType sec;
-	uint32_t secidx;
 	ssize_t got;
 
 	inithdr(&h);
@@ -739,6 +736,9 @@ allraw2grains(int ifd, uint64_t capacity, int ofd)
 	lseek(ifd, 0, SEEK_SET);
 	read_total = 0;
 	for (sec = 0; got; sec += SET_GRAINSZ) {
+		unsigned char grain[SET_GRAINSZ * SECTORSZ];
+		uint32_t secidx;
+
 		if (capacity && read_total >= capacity) {
 			if (diag > 1)
 				printf("Capacity capped at %llu\n",
@@ -754,6 +754,8 @@ allraw2grains(int ifd, uint64_t capacity, int ofd)
 		}
 
 		if (gtblent == SET_GTESPERGT || (gtblent && !got)) {
+			int n;
+
 			secidx = lseek(ofd, 0, SEEK_CUR) / SECTORSZ + 1;
 
 			writemarker(ofd, gtblsz / SECTORSZ, MARKER_GT,
@@ -777,8 +779,7 @@ allraw2grains(int ifd, uint64_t capacity, int ofd)
 		}
 	}
 
-	secidx = lseek(ofd, 0, SEEK_CUR) / SECTORSZ + 1;
-	h.gdOffset = secidx;
+	h.gdOffset = lseek(ofd, 0, SEEK_CUR) / SECTORSZ + 1;
 
 	writemarker(ofd, gdirsz / SECTORSZ, MARKER_GD, "grain dir marker");
 
@@ -807,6 +808,7 @@ allraw2grains(int ifd, uint64_t capacity, int ofd)
 		printf("Rewound to the start of the file... ");
 	awrite(ofd, &h, sizeof h, "header");
 
+	char descblk[SECTORSZ];
 	memset(descblk, '\0', sizeof descblk);
 	snprintf(descblk, sizeof descblk,
 	    "# Disk DescriptorFile\n"
