@@ -763,6 +763,7 @@ allraw2grains(int ifd, int ofd)
 	lseek(ifd, 0, SEEK_SET);
 	read_total = 0;
 
+    {
 	SectorType sec;
 	ssize_t got;
 
@@ -809,6 +810,7 @@ allraw2grains(int ifd, int ofd)
 			gtblent = 0;
 		}
 	}
+    }
 
 	h.gdOffset = lseek(ofd, 0, SEEK_CUR) / SECTORSZ + 1;
 
