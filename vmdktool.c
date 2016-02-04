@@ -817,10 +817,11 @@ writegrains(int ifd, int ofd)
 			writegrain(grain, ofd, sec);
 		}
 
-		if (ntblents == SET_GTESPERGT || (ntblents && !got)) {
+		if (ntblents == SET_GTESPERGT)
 			writedir(ofd);
-		}
 	}
+	if (ntblents)
+		writedir(ofd);
 
 	free(tblbuf);
 
