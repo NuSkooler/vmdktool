@@ -708,6 +708,35 @@ writemarker(int ofd, SectorType val, uint32_t type, const char *what)
 }
 
 static void
+writedescblk(int ofd)
+{
+	char descblk[SECTORSZ];
+
+	memset(descblk, '\0', sizeof descblk);
+	snprintf(descblk, sizeof descblk,
+	    "# Disk DescriptorFile\n"
+	    "version=1\n"
+	    "CID=278f54ff\n"
+	    "parentCID=ffffffff\n"
+	    "createType=\"streamOptimized\"\n"
+	    "\n"
+	    "\n"
+	    "# Extent description\n"
+	    "RDONLY %lu SPARSE \"generated-stream.vmdk\"\n"
+	    "\n"
+	    "#DDB\n"
+	    "ddb.virtualHWVersion = \"4\"\n"
+	    "ddb.geometry.cylinders = \"%lu\"\n"
+	    "ddb.geometry.heads = \"255\"\n"
+	    "ddb.geometry.sectors = \"63\"\n"
+	    "ddb.adapterType = \"lsilogic\"\n"
+	    "ddb.toolsVersion = \"6532\"\n",
+	    (unsigned long)(capacity / SECTORSZ),
+	    (unsigned long)(capacity / 63 / 255));
+	awrite(ofd, &descblk, sizeof descblk, "descriptor block");
+}
+
+static void
 allraw2grains(int ifd, int ofd)
 {
 	struct SparseExtentHeader h;
@@ -716,8 +745,6 @@ allraw2grains(int ifd, int ofd)
 	char *gtbl;
 	size_t gdirsz, gtblsz;
 	uint64_t read_total;
-	SectorType sec;
-	ssize_t got;
 
 	inithdr(&h);
 
@@ -731,12 +758,15 @@ allraw2grains(int ifd, int ofd)
 	gtbl = calloc(1, gtblsz);
 	assert(gtbl != NULL);
 
-	got = -1;
 	gdirent = gtblent = 0;
 
 	lseek(ifd, 0, SEEK_SET);
 	read_total = 0;
-	for (sec = 0; got; sec += SET_GRAINSZ) {
+
+	SectorType sec;
+	ssize_t got;
+
+	for (sec = 0, got = -1; got; sec += SET_GRAINSZ) {
 		unsigned char grain[SET_GRAINSZ * SECTORSZ];
 		uint32_t secidx;
 
@@ -809,29 +839,7 @@ allraw2grains(int ifd, int ofd)
 		printf("Rewound to the start of the file... ");
 	awrite(ofd, &h, sizeof h, "header");
 
-	char descblk[SECTORSZ];
-	memset(descblk, '\0', sizeof descblk);
-	snprintf(descblk, sizeof descblk,
-	    "# Disk DescriptorFile\n"
-	    "version=1\n"
-	    "CID=278f54ff\n"
-	    "parentCID=ffffffff\n"
-	    "createType=\"streamOptimized\"\n"
-	    "\n"
-	    "\n"
-	    "# Extent description\n"
-	    "RDONLY %lu SPARSE \"generated-stream.vmdk\"\n"
-	    "\n"
-	    "#DDB\n"
-	    "ddb.virtualHWVersion = \"4\"\n"
-	    "ddb.geometry.cylinders = \"%lu\"\n"
-	    "ddb.geometry.heads = \"255\"\n"
-	    "ddb.geometry.sectors = \"63\"\n"
-	    "ddb.adapterType = \"lsilogic\"\n"
-	    "ddb.toolsVersion = \"6532\"\n",
-	    (unsigned long)(capacity / SECTORSZ),
-	    (unsigned long)(capacity / 63 / 255));
-	awrite(ofd, &descblk, sizeof descblk, "descriptor block");
+	writedescblk(ofd);
 }
 
 int
