@@ -635,7 +635,7 @@ zipgrain(unsigned char *grain, int ofd, struct Marker *m)
 	deflateEnd(&strm);
 }
 
-static uint32_t
+static void
 writegrain(unsigned char *grain, int ofd, SectorType sec)
 {
 	off_t start, end;
@@ -666,8 +666,6 @@ writegrain(unsigned char *grain, int ofd, SectorType sec)
 	lseek(ofd, end, SEEK_SET);
 	if (diag > 1)
 		printf("Moved to the end of the grain... ");
-
-	return (uint32_t)(start / SECTORSZ);
 }
 
 static void
@@ -784,7 +782,7 @@ writegrains(int ifd, int ofd, size_t *rgdirsz, uint64_t *rread_total)
 			memcpy((char *)gtbl + gtblent * 4, &secidx, 4);
 			gtblent++;
 
-			(void)writegrain(grain, ofd, sec);
+			writegrain(grain, ofd, sec);
 
 			read_total += got;
 		}
