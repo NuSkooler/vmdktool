@@ -760,17 +760,22 @@ readgrain(int ifd, unsigned char *grain, ssize_t len)
 }
 
 static void
+growdirbuf(void)
+{
+	dirbuf = realloc(dirbuf, dirsz + SECTORSZ);
+	assert(dirbuf != NULL);
+	memset((char *)dirbuf + dirsz, '\0', SECTORSZ);
+	dirsz += SECTORSZ;
+	assert(ndirents * sizeof(uint32_t) < dirsz);
+}
+
+static void
 writedir(int ofd)
 {
 	uint32_t secidx;
 
-	if (ndirents * sizeof(uint32_t) >= dirsz) {
-		dirbuf = realloc(dirbuf, dirsz + SECTORSZ);
-		assert(dirbuf != NULL);
-		memset((char *)dirbuf + dirsz, '\0', SECTORSZ);
-		dirsz += SECTORSZ;
-		assert(ndirents * sizeof(uint32_t) < dirsz);
-	}
+	if (ndirents * sizeof(uint32_t) >= dirsz)
+		growdirbuf();
 
 	secidx = lseek(ofd, 0, SEEK_CUR) / SECTORSZ + 1;
 	memcpy((char *)dirbuf + ndirents * 4, &secidx, 4);
@@ -787,6 +792,9 @@ writedir(int ofd)
 static void
 writegrains(int ifd, int ofd)
 {
+	SectorType sec;
+	ssize_t got;
+
 	read_total = 0;
 
 	dirsz = SECTORSZ;
@@ -799,17 +807,15 @@ writegrains(int ifd, int ofd)
 	ntblents = 0;
 	assert(tblbuf != NULL);
 
-	SectorType sec;
-	ssize_t got;
-
 	for (sec = 0, got = -1; got; sec += SET_GRAINSZ) {
 		unsigned char grain[SET_GRAINSZ * SECTORSZ];
-		uint32_t secidx;
 
 		got = readgrain(ifd, grain, sizeof grain);
 		read_total += got;
 
 		if (got) {
+			uint32_t secidx;
+
 			secidx = lseek(ofd, 0, SEEK_CUR) / SECTORSZ;
 			memcpy((char *)tblbuf + ntblents * 4, &secidx, 4);
 			ntblents++;
@@ -823,11 +829,10 @@ writegrains(int ifd, int ofd)
 	if (ntblents)
 		writedir(ofd);
 
-	free(tblbuf);
-
 	writemarker(ofd, dirsz / SECTORSZ, MARKER_GD, "grain dir marker");
 	awrite(ofd, dirbuf, dirsz, "grain dir");
 
+	free(tblbuf);
 	free(dirbuf);
 }
 
