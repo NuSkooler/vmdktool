@@ -611,7 +611,7 @@ setsize(int fd, SectorType sz)
 }
 
 static void
-grain2marker(unsigned char *grain, int ofd, struct Marker *m)
+zipgrain(unsigned char *grain, int ofd, struct Marker *m)
 {
 	z_stream strm;
 	int ret;
@@ -621,6 +621,7 @@ grain2marker(unsigned char *grain, int ofd, struct Marker *m)
 	assert(ret == Z_OK);
 	strm.avail_in = SET_GRAINSZ * SECTORSZ;
 	strm.next_in = grain;
+	/* Skip first marker header */
 	strm.avail_out = SECTORSZ - MARKERHDRSZ;
 	strm.next_out = (unsigned char *)m + MARKERHDRSZ;
 	ret = Z_OK;
@@ -645,7 +646,7 @@ writegrain(unsigned char *grain, int ofd, SectorType sec)
 	m.size = 0;
 
 	start = lseek(ofd, 0, SEEK_CUR);
-	grain2marker(grain, ofd, &m);
+	zipgrain(grain, ofd, &m);
 	end = lseek(ofd, 0, SEEK_CUR);
 	if (diag > 1)
 		printf("DEFLATEd grain from %lu to %lu\n",
