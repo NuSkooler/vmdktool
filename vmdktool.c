@@ -733,6 +733,27 @@ writedescblk(int ofd, uint64_t sz)
 	awrite(ofd, &descblk, sizeof descblk, "descriptor block");
 }
 
+static ssize_t
+readgrain(int ifd, unsigned char *grain, ssize_t len, uint64_t read_total)
+{
+	ssize_t got;
+	int i;
+
+	if (capacity && read_total >= capacity) {
+		if (diag > 1)
+			printf("Capacity capped at %llu\n",
+			    (unsigned long long)capacity);
+		got = 0;
+	} else
+		got = aread(ifd, grain, len);
+	for (i = 0; i < got; i++)
+		if (grain[i] != '\0')
+			break;
+	if (i == got)
+		got = 0;	/* No data */
+	return got;
+}
+
 static void
 writegrains(int ifd, int ofd, size_t *rgdirsz, uint64_t *rread_total)
 {
@@ -762,20 +783,8 @@ writegrains(int ifd, int ofd, size_t *rgdirsz, uint64_t *rread_total)
 	for (sec = 0, got = -1; got; sec += SET_GRAINSZ) {
 		unsigned char grain[SET_GRAINSZ * SECTORSZ];
 		uint32_t secidx;
-		int i;
 
-		if (capacity && read_total >= capacity) {
-			if (diag > 1)
-				printf("Capacity capped at %llu\n",
-				    (unsigned long long)capacity);
-			got = 0;
-		} else
-			got = aread(ifd, grain, sizeof grain);
-		for (i = 0; i < got; i++)
-			if (grain[i] != '\0')
-				break;
-		if (i == got)
-			got = 0;	/* No data */
+		got = readgrain(ifd, grain, sizeof grain, read_total);
 		read_total += got;
 
 		if (got) {
