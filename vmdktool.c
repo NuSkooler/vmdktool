@@ -834,8 +834,6 @@ allraw2grains(int ifd, int ofd)
 
 	h.gdOffset = (lseek(ofd, 0, SEEK_CUR) - gdirsz - SECTORSZ) / SECTORSZ + 1;
 
-	writemarker(ofd, sizeof h / SECTORSZ, MARKER_FOOTER, "footer");
-
 	/* Finish assigning our header before writing it to disk */
 	if (!capacity) {
 		capacity = read_total;
@@ -844,6 +842,8 @@ allraw2grains(int ifd, int ofd)
 			    (unsigned long long)capacity);
 	}
 	h.capacity = capacity / SECTORSZ;
+
+	writemarker(ofd, sizeof h / SECTORSZ, MARKER_FOOTER, "footer");
 
 	awrite(ofd, &h, sizeof h, "header");
 
