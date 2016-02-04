@@ -760,6 +760,31 @@ readgrain(int ifd, unsigned char *grain, ssize_t len)
 }
 
 static void
+writedir(int ofd)
+{
+	uint32_t secidx;
+
+	if (ndirents * sizeof(uint32_t) >= dirsz) {
+		dirbuf = realloc(dirbuf, dirsz + SECTORSZ);
+		assert(dirbuf != NULL);
+		memset((char *)dirbuf + dirsz, '\0', SECTORSZ);
+		dirsz += SECTORSZ;
+		assert(ndirents * sizeof(uint32_t) < dirsz);
+	}
+
+	secidx = lseek(ofd, 0, SEEK_CUR) / SECTORSZ + 1;
+	memcpy((char *)dirbuf + ndirents * 4, &secidx, 4);
+	ndirents++;
+
+	writemarker(ofd, tblsz / SECTORSZ, MARKER_GT,
+	    "grain table marker");
+	awrite(ofd, tblbuf, tblsz, "grain table");
+
+	memset(tblbuf, '\0', tblsz);
+	ntblents = 0;
+}
+
+static void
 writegrains(int ifd, int ofd)
 {
 	read_total = 0;
@@ -793,24 +818,7 @@ writegrains(int ifd, int ofd)
 		}
 
 		if (ntblents == SET_GTESPERGT || (ntblents && !got)) {
-			if (ndirents * sizeof(uint32_t) >= dirsz) {
-				dirbuf = realloc(dirbuf, dirsz + SECTORSZ);
-				assert(dirbuf != NULL);
-				memset((char *)dirbuf + dirsz, '\0', SECTORSZ);
-				dirsz += SECTORSZ;
-				assert(ndirents * sizeof(uint32_t) < dirsz);
-			}
-
-			secidx = lseek(ofd, 0, SEEK_CUR) / SECTORSZ + 1;
-			memcpy((char *)dirbuf + ndirents * 4, &secidx, 4);
-			ndirents++;
-
-			writemarker(ofd, tblsz / SECTORSZ, MARKER_GT,
-			    "grain table marker");
-			awrite(ofd, tblbuf, tblsz, "grain table");
-
-			memset(tblbuf, '\0', tblsz);
-			ntblents = 0;
+			writedir(ofd);
 		}
 	}
 
