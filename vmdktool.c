@@ -709,7 +709,7 @@ allraw2grains(int ifd, uint64_t capacity, int ofd)
 	size_t gdirsz, gtblsz;
 	uint64_t read_total;
 	SectorType sec;
-	uint32_t ent;
+	uint32_t secidx;
 	ssize_t got;
 
 	inithdr(&h);
@@ -739,15 +739,15 @@ allraw2grains(int ifd, uint64_t capacity, int ofd)
 			got = aread(ifd, grain, sizeof grain);
 		if (got) {
 			read_total += got;
-			ent = raw2grain(grain, ofd, sec);
-			memcpy((char *)gtbl + gtblent * 4, &ent, 4);
+			secidx = raw2grain(grain, ofd, sec);
+			memcpy((char *)gtbl + gtblent * 4, &secidx, 4);
 			gtblent++;
 		}
 
 		if (gtblent == SET_GTESPERGT || (gtblent && !got)) {
 			struct Marker mtbl;
 
-			ent = lseek(ofd, 0, SEEK_CUR) / SECTORSZ + 1;
+			secidx = lseek(ofd, 0, SEEK_CUR) / SECTORSZ + 1;
 
 			memset(&mtbl, '\0', sizeof mtbl);
 			mtbl.val = gtblsz / SECTORSZ;
@@ -766,15 +766,15 @@ allraw2grains(int ifd, uint64_t capacity, int ofd)
 				gdirsz += SECTORSZ;
 				assert(n * sizeof(uint32_t) < gdirsz);
 			}
-			memcpy((char *)gdir + n * 4, &ent, 4);
+			memcpy((char *)gdir + n * 4, &secidx, 4);
 
 			memset(gtbl, '\0', gtblsz);
 			gtblent = 0;
 		}
 	}
 
-	ent = lseek(ofd, 0, SEEK_CUR) / SECTORSZ + 1;
-	h.gdOffset = ent;
+	secidx = lseek(ofd, 0, SEEK_CUR) / SECTORSZ + 1;
+	h.gdOffset = secidx;
 
 	memset(&mdir, '\0', sizeof mdir);
 	mdir.val = gdirsz / SECTORSZ;
