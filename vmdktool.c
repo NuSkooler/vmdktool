@@ -733,8 +733,13 @@ writedescblk(int ofd, uint64_t sz)
 	awrite(ofd, &descblk, sizeof descblk, "descriptor block");
 }
 
+char *dirbuf, *tblbuf;
+size_t dirsz, tblsz;
+int ndirents, ntblents;
+uint64_t read_total;
+
 static ssize_t
-readgrain(int ifd, unsigned char *grain, ssize_t len, uint64_t read_total)
+readgrain(int ifd, unsigned char *grain, ssize_t len)
 {
 	ssize_t got;
 	int i;
@@ -755,13 +760,8 @@ readgrain(int ifd, unsigned char *grain, ssize_t len, uint64_t read_total)
 }
 
 static void
-writegrains(int ifd, int ofd, size_t *rdirsz, uint64_t *rread_total)
+writegrains(int ifd, int ofd)
 {
-	uint64_t read_total;
-	char *dirbuf, *tblbuf;
-	size_t dirsz, tblsz;
-	int ndirents, ntblents;
-
 	read_total = 0;
 
 	dirsz = SECTORSZ;
@@ -781,7 +781,7 @@ writegrains(int ifd, int ofd, size_t *rdirsz, uint64_t *rread_total)
 		unsigned char grain[SET_GRAINSZ * SECTORSZ];
 		uint32_t secidx;
 
-		got = readgrain(ifd, grain, sizeof grain, read_total);
+		got = readgrain(ifd, grain, sizeof grain);
 		read_total += got;
 
 		if (got) {
@@ -820,17 +820,13 @@ writegrains(int ifd, int ofd, size_t *rdirsz, uint64_t *rread_total)
 	awrite(ofd, dirbuf, dirsz, "grain dir");
 
 	free(dirbuf);
-
-	*rdirsz = dirsz;
-	*rread_total = read_total;
 }
 
 static void
 writevmdk(int ifd, int ofd)
 {
 	struct SparseExtentHeader h;
-	size_t dirsz;
-	uint64_t read_total, sz;
+	uint64_t sz;
 
 	inithdr(&h);
 
@@ -838,7 +834,7 @@ writevmdk(int ifd, int ofd)
 	lseek(ofd, h.overHead * SECTORSZ, SEEK_SET);
 
 	/* 1. Write Gains */
-	writegrains(ifd, ofd, &dirsz, &read_total);
+	writegrains(ifd, ofd);
 
 	/* 2. Compute sizes and finish header */
 	h.gdOffset = (lseek(ofd, 0, SEEK_CUR) - dirsz - SECTORSZ) / SECTORSZ + 1;
