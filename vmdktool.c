@@ -843,11 +843,10 @@ allraw2grains(int ifd, int ofd)
 	}
 	h.capacity = capacity / SECTORSZ;
 
-	writemarker(ofd, sizeof h / SECTORSZ, MARKER_FOOTER, "footer");
+	writemarker(ofd, sizeof h / SECTORSZ, MARKER_FOOTER, "footer marker");
+	awrite(ofd, &h, sizeof h, "footer");
 
-	awrite(ofd, &h, sizeof h, "header");
-
-	writemarker(ofd, 0, MARKER_EOS, "eos");
+	writemarker(ofd, 0, MARKER_EOS, "eos marker");
 
 	/* Go back and write the header & descriptor block at the beginning */
 	lseek(ofd, 0, SEEK_SET);
