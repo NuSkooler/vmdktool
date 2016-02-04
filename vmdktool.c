@@ -695,10 +695,21 @@ inithdr(struct SparseExtentHeader *h)
 }
 
 static void
+writemarker(int ofd, SectorType val, uint32_t type, const char *what)
+{
+	struct Marker m;
+
+	memset(&m, '\0', sizeof m);
+	m.val = val;
+	m.size = 0;
+	m.u.type = type;
+	awrite(ofd, &m, SECTORSZ, what);
+}
+
+static void
 allraw2grains(int ifd, uint64_t capacity, int ofd)
 {
         unsigned char grain[SET_GRAINSZ * SECTORSZ];
-	struct Marker eos, footer, mdir;
 	struct SparseExtentHeader h;
 	int gdirent, gtblent, n;
 	char *gdir;
@@ -743,15 +754,10 @@ allraw2grains(int ifd, uint64_t capacity, int ofd)
 		}
 
 		if (gtblent == SET_GTESPERGT || (gtblent && !got)) {
-			struct Marker mtbl;
-
 			secidx = lseek(ofd, 0, SEEK_CUR) / SECTORSZ + 1;
 
-			memset(&mtbl, '\0', sizeof mtbl);
-			mtbl.val = gtblsz / SECTORSZ;
-			mtbl.size = 0;
-			mtbl.u.type = MARKER_GT;
-			awrite(ofd, &mtbl, SECTORSZ, "grain table marker");
+			writemarker(ofd, gtblsz / SECTORSZ, MARKER_GT,
+			    "grain table marker");
 
 			awrite(ofd, gtbl, gtblsz, "grain table");
 
@@ -774,19 +780,11 @@ allraw2grains(int ifd, uint64_t capacity, int ofd)
 	secidx = lseek(ofd, 0, SEEK_CUR) / SECTORSZ + 1;
 	h.gdOffset = secidx;
 
-	memset(&mdir, '\0', sizeof mdir);
-	mdir.val = gdirsz / SECTORSZ;
-	mdir.size = 0;
-	mdir.u.type = MARKER_GD;
-	awrite(ofd, &mdir, SECTORSZ, "grain dir marker");
+	writemarker(ofd, gdirsz / SECTORSZ, MARKER_GD, "grain dir marker");
 
 	awrite(ofd, gdir, gdirsz, "grain dir");
 
-	memset(&footer, '\0', sizeof footer);
-	footer.val = sizeof h / SECTORSZ;
-	footer.size = 0;
-	footer.u.type = MARKER_FOOTER;
-	awrite(ofd, &footer, sizeof footer, "footer");
+	writemarker(ofd, sizeof h / SECTORSZ, MARKER_FOOTER, "footer");
 
 	/* Finish assigning our header before writing it to disk */
 	if (!capacity) {
@@ -798,11 +796,7 @@ allraw2grains(int ifd, uint64_t capacity, int ofd)
 	h.capacity = capacity / SECTORSZ;
 	awrite(ofd, &h, sizeof h, "header");
 
-	memset(&eos, '\0', sizeof eos);
-	eos.val = 0;
-	eos.size = 0;
-	eos.u.type = MARKER_EOS;
-	awrite(ofd, &eos, sizeof eos, "eos");
+	writemarker(ofd, 0, MARKER_EOS, "eos");
 
 	free(gtbl);
 	free(gdir);
