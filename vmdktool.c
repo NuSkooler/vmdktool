@@ -758,12 +758,9 @@ static void
 writegrains(int ifd, int ofd, size_t *rdirsz, uint64_t *rread_total)
 {
 	uint64_t read_total;
-	char *dir;
-	size_t dirsz;
-	int dirent;
-	char *tbl;
-	size_t tblsz;
-	int tblent;
+	char *dir, *tbl;
+	size_t dirsz, tblsz;
+	int dirent, tblent;
 
 	read_total = 0;
 
