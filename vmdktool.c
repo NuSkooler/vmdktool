@@ -776,6 +776,7 @@ writegrains(int ifd, int ofd, size_t *rgdirsz, uint64_t *rread_total)
 				break;
 		if (i == got)
 			got = 0;	/* No data */
+		read_total += got;
 
 		if (got) {
 			secidx = lseek(ofd, 0, SEEK_CUR) / SECTORSZ;
@@ -783,8 +784,6 @@ writegrains(int ifd, int ofd, size_t *rgdirsz, uint64_t *rread_total)
 			gtblent++;
 
 			writegrain(grain, ofd, sec);
-
-			read_total += got;
 		}
 
 		if (gtblent == SET_GTESPERGT || (gtblent && !got)) {
@@ -803,6 +802,7 @@ writegrains(int ifd, int ofd, size_t *rgdirsz, uint64_t *rread_total)
 			writemarker(ofd, gtblsz / SECTORSZ, MARKER_GT,
 			    "grain table marker");
 			awrite(ofd, gtbl, gtblsz, "grain table");
+
 			memset(gtbl, '\0', gtblsz);
 			gtblent = 0;
 		}
@@ -811,7 +811,6 @@ writegrains(int ifd, int ofd, size_t *rgdirsz, uint64_t *rread_total)
 	free(gtbl);
 
 	writemarker(ofd, gdirsz / SECTORSZ, MARKER_GD, "grain dir marker");
-
 	awrite(ofd, gdir, gdirsz, "grain dir");
 
 	free(gdir);
