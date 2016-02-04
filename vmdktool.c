@@ -694,6 +694,8 @@ inithdr(struct SparseExtentHeader *h)
 	h->compressAlgorithm = COMPRESSION_DEFLATE;
 }
 
+#define GDIR
+
 static void
 allraw2grains(int ifd, uint64_t capacity, int ofd)
 {
@@ -707,20 +709,37 @@ allraw2grains(int ifd, uint64_t capacity, int ofd)
 	SectorType sec;
 	uint32_t ent;
 	ssize_t got;
+#ifdef GDIR
+	char *gdir;
+	size_t gdirsz;
+	int gdirent;
+#endif
 
 	inithdr(&h);
 
 	lseek(ofd, h.overHead * SECTORSZ, SEEK_SET);
 
+if (0) {
 	mdirsz = SECTORSZ * 2;
 	mdir = calloc(1, mdirsz);
 	assert(mdir != NULL);
+}
+#ifdef GDIR
+	gdirsz = SECTORSZ;
+	gdir = calloc(1, gdirsz);
+	assert(gdir != NULL);
+#endif
+
 	mtblsz = SET_GTESPERGT * sizeof(uint32_t);
 	mtbl = calloc(1, SECTORSZ + mtblsz);
 	assert(mtbl != NULL);
 
 	got = -1;
 	mdirent = mtblent = 0;
+#ifdef GDIR
+	gdirent = 0;
+#endif
+
 	lseek(ifd, 0, SEEK_SET);
 	read_total = 0;
 	for (sec = 0; got; sec += SET_GRAINSZ) {
@@ -744,26 +763,54 @@ allraw2grains(int ifd, uint64_t capacity, int ofd)
 			mtbl->u.type = MARKER_GT;
 			ent = lseek(ofd, 0, SEEK_CUR) / SECTORSZ + 1;
 			awrite(ofd, mtbl, SECTORSZ + mtblsz, "grain table");
+
+if (0) {
 			n = SECTORSZ / sizeof(uint32_t) + mdirent++;
 			if (n * sizeof(uint32_t) >= mdirsz) {
 				mdir = realloc(mdir, mdirsz + SECTORSZ);
 				assert(mdir != NULL);
+
 				memset((char *)mdir + mdirsz, '\0', SECTORSZ);
 				mdirsz += SECTORSZ;
 				assert(n * sizeof(uint32_t) < mdirsz);
 			}
 			memcpy((char *)mdir + n * 4, &ent, 4);
+}
+#ifdef GDIR
+			n = gdirent++;
+			if (n * sizeof(uint32_t) >= gdirsz) {
+				gdir = realloc(gdir, gdirsz + SECTORSZ);
+				assert(gdir != NULL);
+
+				memset((char *)gdir + gdirsz, '\0', SECTORSZ);
+				gdirsz += SECTORSZ;
+				assert(n * sizeof(uint32_t) < gdirsz);
+			}
+			memcpy((char *)gdir + n * 4, &ent, 4);
+#endif
+
 			memset(mtbl, '\0', SECTORSZ + mtblsz);
 			mtblent = 0;
 		}
 	}
 
+	ent = lseek(ofd, 0, SEEK_CUR) / SECTORSZ + 1;
+	h.gdOffset = ent;
+
+if (0) {
 	mdir->val = mdirsz / SECTORSZ - 1;
 	mdir->size = 0;
 	mdir->u.type = MARKER_GD;
-	ent = lseek(ofd, 0, SEEK_CUR) / SECTORSZ + 1;
 	awrite(ofd, mdir, mdirsz, "grain dir");
-	h.gdOffset = ent;
+} else {
+	struct Marker mdir2;
+	memset(&mdir2, '\0', sizeof mdir2);
+	mdir2.val = gdirsz / SECTORSZ;
+	mdir2.size = 0;
+	mdir2.u.type = MARKER_GD;
+	awrite(ofd, &mdir2, SECTORSZ, "grain dir marker");
+	awrite(ofd, gdir, gdirsz, "grain dir");
+}
 
 	memset(&footer, '\0', sizeof footer);
 	footer.val = sizeof h / SECTORSZ;
@@ -788,7 +835,12 @@ allraw2grains(int ifd, uint64_t capacity, int ofd)
 	awrite(ofd, &eos, sizeof eos, "eos");
 
 	free(mtbl);
+if (0) {
 	free(mdir);
+}
+#ifdef GDIR
+	free(gdir);
+#endif
 
 	/* Go back and write the header & descriptor block at the beginning */
 	lseek(ofd, 0, SEEK_SET);
