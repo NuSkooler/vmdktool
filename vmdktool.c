@@ -751,6 +751,7 @@ readgrain(int ifd, unsigned char *grain, ssize_t len)
 		got = 0;
 	} else
 		got = aread(ifd, grain, len);
+	/* \0 chars are not counted */
 	for (i = 0; i < got; i++)
 		if (grain[i] != '\0')
 			break;
@@ -770,7 +771,7 @@ growdirbuf(void)
 }
 
 static void
-writedir(int ofd)
+writetbl(int ofd)
 {
 	uint32_t secidx;
 
@@ -787,6 +788,13 @@ writedir(int ofd)
 
 	memset(tblbuf, '\0', tblsz);
 	ntblents = 0;
+}
+
+static void
+writedir(int ofd)
+{
+	writemarker(ofd, dirsz / SECTORSZ, MARKER_GD, "grain dir marker");
+	awrite(ofd, dirbuf, dirsz, "grain dir");
 }
 
 static void
@@ -807,12 +815,10 @@ writegrains(int ifd, int ofd)
 	ntblents = 0;
 	assert(tblbuf != NULL);
 
-	for (sec = 0, got = -1; got; sec += SET_GRAINSZ) {
+	for (sec = 0, got = -1; got; sec += SET_GRAINSZ, read_total += got) {
 		unsigned char grain[SET_GRAINSZ * SECTORSZ];
 
 		got = readgrain(ifd, grain, sizeof grain);
-		read_total += got;
-
 		if (got) {
 			uint32_t secidx;
 
@@ -822,15 +828,13 @@ writegrains(int ifd, int ofd)
 
 			writegrain(grain, ofd, sec);
 		}
-
 		if (ntblents == SET_GTESPERGT)
-			writedir(ofd);
+			writetbl(ofd);
 	}
 	if (ntblents)
-		writedir(ofd);
+		writetbl(ofd);
 
-	writemarker(ofd, dirsz / SECTORSZ, MARKER_GD, "grain dir marker");
-	awrite(ofd, dirbuf, dirsz, "grain dir");
+	writedir(ofd);
 
 	free(tblbuf);
 	free(dirbuf);
