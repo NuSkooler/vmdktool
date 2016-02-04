@@ -635,17 +635,10 @@ grain2marker(unsigned char *grain, int ofd, struct Marker *m)
 }
 
 static uint32_t
-raw2grain(unsigned char *grain, int ofd, SectorType sec)
+writegrain(unsigned char *grain, int ofd, SectorType sec)
 {
 	off_t start, end;
 	struct Marker m;
-	int i;
-
-	for (i = SET_GRAINSZ * SECTORSZ; i; i--)
-		if (grain[i - 1])
-			break;
-	if (!i)
-		return 0;	/* No data */
 
 	/* First marker header is overwritten below */
 	m.val = 0;
@@ -745,9 +738,9 @@ static void
 writegrains(int ifd, int ofd, size_t *rgdirsz, uint64_t *rread_total)
 {
 	uint64_t read_total;
-	int gdirent;
 	char *gdir;
 	size_t gdirsz;
+	int gdirent;
 	char *gtbl;
 	size_t gtblsz;
 	int gtblent;
@@ -770,6 +763,7 @@ writegrains(int ifd, int ofd, size_t *rgdirsz, uint64_t *rread_total)
 	for (sec = 0, got = -1; got; sec += SET_GRAINSZ) {
 		unsigned char grain[SET_GRAINSZ * SECTORSZ];
 		uint32_t secidx;
+		int i;
 
 		if (capacity && read_total >= capacity) {
 			if (diag > 1)
@@ -778,15 +772,23 @@ writegrains(int ifd, int ofd, size_t *rgdirsz, uint64_t *rread_total)
 			got = 0;
 		} else
 			got = aread(ifd, grain, sizeof grain);
+		for (i = 0; i < got; i++)
+			if (grain[i] != '\0')
+				break;
+		if (i == got)
+			got = 0;	/* No data */
+
 		if (got) {
-			read_total += got;
-			secidx = raw2grain(grain, ofd, sec);
+			secidx = lseek(ofd, 0, SEEK_CUR) / SECTORSZ;
 			memcpy((char *)gtbl + gtblent * 4, &secidx, 4);
 			gtblent++;
+
+			(void)writegrain(grain, ofd, sec);
+
+			read_total += got;
 		}
 
 		if (gtblent == SET_GTESPERGT || (gtblent && !got)) {
-			secidx = lseek(ofd, 0, SEEK_CUR) / SECTORSZ + 1;
 			if (gdirent * sizeof(uint32_t) >= gdirsz) {
 				gdir = realloc(gdir, gdirsz + SECTORSZ);
 				assert(gdir != NULL);
@@ -794,6 +796,8 @@ writegrains(int ifd, int ofd, size_t *rgdirsz, uint64_t *rread_total)
 				gdirsz += SECTORSZ;
 				assert(gdirent * sizeof(uint32_t) < gdirsz);
 			}
+
+			secidx = lseek(ofd, 0, SEEK_CUR) / SECTORSZ + 1;
 			memcpy((char *)gdir + gdirent * 4, &secidx, 4);
 			gdirent++;
 
@@ -818,7 +822,7 @@ writegrains(int ifd, int ofd, size_t *rgdirsz, uint64_t *rread_total)
 }
 
 static void
-allraw2grains(int ifd, int ofd)
+allwritegrain(int ifd, int ofd)
 {
 	struct SparseExtentHeader h;
 	size_t gdirsz;
@@ -1085,7 +1089,7 @@ main(int argc, char **argv)
 			perror(vmdkfn);
 			return 12;
 		}
-		allraw2grains(ifd, ofd);
+		allwritegrain(ifd, ofd);
 		if (close(ofd) == -1)
 			perror("close");
 	}
