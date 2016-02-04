@@ -758,21 +758,21 @@ static void
 writegrains(int ifd, int ofd, size_t *rdirsz, uint64_t *rread_total)
 {
 	uint64_t read_total;
-	char *dir, *tbl;
+	char *dirbuf, *tblbuf;
 	size_t dirsz, tblsz;
-	int dirent, tblent;
+	int ndirents, ntblents;
 
 	read_total = 0;
 
 	dirsz = SECTORSZ;
-	dir = calloc(1, dirsz);
-	dirent = 0;
-	assert(dir != NULL);
+	dirbuf = calloc(1, dirsz);
+	ndirents = 0;
+	assert(dirbuf != NULL);
 
 	tblsz = SET_GTESPERGT * sizeof(uint32_t);
-	tbl = calloc(1, tblsz);
-	tblent = 0;
-	assert(tbl != NULL);
+	tblbuf = calloc(1, tblsz);
+	ntblents = 0;
+	assert(tblbuf != NULL);
 
 	SectorType sec;
 	ssize_t got;
@@ -786,40 +786,40 @@ writegrains(int ifd, int ofd, size_t *rdirsz, uint64_t *rread_total)
 
 		if (got) {
 			secidx = lseek(ofd, 0, SEEK_CUR) / SECTORSZ;
-			memcpy((char *)tbl + tblent * 4, &secidx, 4);
-			tblent++;
+			memcpy((char *)tblbuf + ntblents * 4, &secidx, 4);
+			ntblents++;
 
 			writegrain(grain, ofd, sec);
 		}
 
-		if (tblent == SET_GTESPERGT || (tblent && !got)) {
-			if (dirent * sizeof(uint32_t) >= dirsz) {
-				dir = realloc(dir, dirsz + SECTORSZ);
-				assert(dir != NULL);
-				memset((char *)dir + dirsz, '\0', SECTORSZ);
+		if (ntblents == SET_GTESPERGT || (ntblents && !got)) {
+			if (ndirents * sizeof(uint32_t) >= dirsz) {
+				dirbuf = realloc(dirbuf, dirsz + SECTORSZ);
+				assert(dirbuf != NULL);
+				memset((char *)dirbuf + dirsz, '\0', SECTORSZ);
 				dirsz += SECTORSZ;
-				assert(dirent * sizeof(uint32_t) < dirsz);
+				assert(ndirents * sizeof(uint32_t) < dirsz);
 			}
 
 			secidx = lseek(ofd, 0, SEEK_CUR) / SECTORSZ + 1;
-			memcpy((char *)dir + dirent * 4, &secidx, 4);
-			dirent++;
+			memcpy((char *)dirbuf + ndirents * 4, &secidx, 4);
+			ndirents++;
 
 			writemarker(ofd, tblsz / SECTORSZ, MARKER_GT,
 			    "grain table marker");
-			awrite(ofd, tbl, tblsz, "grain table");
+			awrite(ofd, tblbuf, tblsz, "grain table");
 
-			memset(tbl, '\0', tblsz);
-			tblent = 0;
+			memset(tblbuf, '\0', tblsz);
+			ntblents = 0;
 		}
 	}
 
-	free(tbl);
+	free(tblbuf);
 
 	writemarker(ofd, dirsz / SECTORSZ, MARKER_GD, "grain dir marker");
-	awrite(ofd, dir, dirsz, "grain dir");
+	awrite(ofd, dirbuf, dirsz, "grain dir");
 
-	free(dir);
+	free(dirbuf);
 
 	*rdirsz = dirsz;
 	*rread_total = read_total;
