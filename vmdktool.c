@@ -737,33 +737,28 @@ writedescblk(int ofd)
 }
 
 static void
-allraw2grains(int ifd, int ofd)
+writegrains(int ifd, int ofd, size_t *rgdirsz, uint64_t *rread_total)
 {
-	struct SparseExtentHeader h;
-	int gdirent, gtblent;
-	char *gdir;
-	char *gtbl;
-	size_t gdirsz, gtblsz;
 	uint64_t read_total;
+	int gdirent;
+	char *gdir;
+	size_t gdirsz;
+	char *gtbl;
+	size_t gtblsz;
+	int gtblent;
 
-	inithdr(&h);
-
-	lseek(ofd, h.overHead * SECTORSZ, SEEK_SET);
+	read_total = 0;
 
 	gdirsz = SECTORSZ;
 	gdir = calloc(1, gdirsz);
+	gdirent = 0;
 	assert(gdir != NULL);
 
 	gtblsz = SET_GTESPERGT * sizeof(uint32_t);
 	gtbl = calloc(1, gtblsz);
+	gtblent = 0;
 	assert(gtbl != NULL);
 
-	gdirent = gtblent = 0;
-
-	lseek(ifd, 0, SEEK_SET);
-	read_total = 0;
-
-    {
 	SectorType sec;
 	ssize_t got;
 
@@ -810,13 +805,34 @@ allraw2grains(int ifd, int ofd)
 			gtblent = 0;
 		}
 	}
-    }
 
-	h.gdOffset = lseek(ofd, 0, SEEK_CUR) / SECTORSZ + 1;
+	free(gtbl);
 
 	writemarker(ofd, gdirsz / SECTORSZ, MARKER_GD, "grain dir marker");
 
 	awrite(ofd, gdir, gdirsz, "grain dir");
+
+	free(gdir);
+
+	*rgdirsz = gdirsz;
+	*rread_total = read_total;
+}
+
+static void
+allraw2grains(int ifd, int ofd)
+{
+	struct SparseExtentHeader h;
+	size_t gdirsz;
+	uint64_t read_total;
+
+	inithdr(&h);
+
+	lseek(ifd, 0, SEEK_SET);
+	lseek(ofd, h.overHead * SECTORSZ, SEEK_SET);
+
+	writegrains(ifd, ofd, &gdirsz, &read_total);
+
+	h.gdOffset = (lseek(ofd, 0, SEEK_CUR) - gdirsz - SECTORSZ) / SECTORSZ + 1;
 
 	writemarker(ofd, sizeof h / SECTORSZ, MARKER_FOOTER, "footer");
 
@@ -828,12 +844,10 @@ allraw2grains(int ifd, int ofd)
 			    (unsigned long long)capacity);
 	}
 	h.capacity = capacity / SECTORSZ;
+
 	awrite(ofd, &h, sizeof h, "header");
 
 	writemarker(ofd, 0, MARKER_EOS, "eos");
-
-	free(gtbl);
-	free(gdir);
 
 	/* Go back and write the header & descriptor block at the beginning */
 	lseek(ofd, 0, SEEK_SET);
