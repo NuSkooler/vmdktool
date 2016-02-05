@@ -793,7 +793,7 @@ writevmdk(int ifd, int ofd)
 	lseek(ifd, 0, SEEK_SET);
 	lseek(ofd, h.overHead * SECTORSZ, SEEK_SET);
 
-	/* 1. Write Gains */
+	/* 1. Write Grains */
 	writegrains(ifd, ofd);
 
 	/* 2. Compute sizes and finish header */
