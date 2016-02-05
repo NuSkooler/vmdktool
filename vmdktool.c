@@ -613,7 +613,7 @@ writegrain(unsigned char *grain, int ofd, SectorType sec)
 static void
 inithdr(struct SparseExtentHeader *h)
 {
-	memset(h, '\0', sizeof h);
+	memset(h, '\0', sizeof *h);
 	h->magicNumber = VMDK_MAGIC;
 	h->version = SET_VMDKVER;
 	h->flags = FLAGBIT_NL | FLAGBIT_COMPRESSED | FLAGBIT_MARKERS;
@@ -838,6 +838,7 @@ main(int argc, char **argv)
 	struct stat st;
 	off_t insz;
 	int ret;
+	int64_t num;
 
 	assert(sizeof h == SECTORSZ);	/* must be padded & packed! */
 	assert(sizeof *m == SECTORSZ);	/* must be padded & packed! */
@@ -855,10 +856,12 @@ main(int argc, char **argv)
 	while ((ch = getopt(argc, argv, ":c:dir:s:t:Vv:z:")) != -1) {
 		switch (ch) {
 		case 'c':
-			if (expand_number(optarg, &capacity)) {
+			num = capacity;
+			if (expand_number(optarg, &num)) {
 				perror(optarg);
 				return usage();
 			}
+			capacity = num;
 			break;
 		case 'd':
 			diag++;

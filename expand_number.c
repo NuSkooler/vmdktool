@@ -31,9 +31,7 @@ __FBSDID("$FreeBSD: src/lib/libutil/expand_number.c,v 1.2.4.2 2009/06/10 14:52:3
 #endif
 
 #include <sys/types.h>
-#ifndef __APPLE__
 #include <ctype.h>
-#endif
 #include <errno.h>
 #include <inttypes.h>
 #include <stdint.h>
